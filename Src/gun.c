@@ -24,7 +24,7 @@ static uint8_t isGunOn = 0;
 static uint32_t powerCalcTimer;
 static uint8_t currentFanSpeed = 80;
 static uint8_t currentUserSetFanSpeed = 80;
-#define POWER_CALCULATION_PERIOD 1000
+#define POWER_CALCULATION_PERIOD 5000
 
 static GPIO_TypeDef *m_heater_port = NULL;
 static TIM_HandleTypeDef *fanTimer = NULL;
@@ -159,7 +159,7 @@ uint16_t getUserSetTemperature() {
 void handleGun(uint8_t activity) {
 	uint32_t currentTime = HAL_GetTick();
 	if(currentTime - powerCalcTimer > POWER_CALCULATION_PERIOD) {
-		currentGunPower = gunTimeOnSinceLastUpdate / POWER_CALCULATION_PERIOD * 100;
+		currentGunPower = ((double)(gunTimeOnSinceLastUpdate * 100))/ (double)POWER_CALCULATION_PERIOD;
 		gunTimeOnSinceLastUpdate = 0;
 		if(currentGunPower > 100)
 			currentGunPower = 100;
@@ -168,6 +168,8 @@ void handleGun(uint8_t activity) {
 		case mode_set:
 			if(activity)
 				currentModeTimer = currentTime;
+			else
+				setCurrentMode(mode_cooling);
 			break;
 		case mode_cooling:
 			//if(activity) {

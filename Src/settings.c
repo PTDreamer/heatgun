@@ -39,7 +39,7 @@ void restoreSettings() {
 void resetSettings() {
 	systemSettings.version = SETTINGSVERSION;
 	systemSettings.contrast = 0x7F;
-	systemSettings.coolDown.coolDownTemperature = 80;
+	systemSettings.coolDown.coolDownTemperature = 100;
 	systemSettings.coolDown.fanSpeed = 100;
 	systemSettings.coolDown.maxTime = 5;
 	systemSettings.calibrationData.calADC_At_200 = 1170;//793;

@@ -36,6 +36,7 @@ gun_mode_t getCurrentMode();
 uint16_t getSystemSetTemperature();
 uint16_t getUserSetTemperature();
 uint16_t getCurrentTemperature();
+uint16_t getSetTemperature();
 uint8_t getCurrentPower();
 void setCurrentUserSetFanSpeed(uint8_t speed);
 uint8_t getCurrentUserSetFanSpeed();

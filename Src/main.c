@@ -150,11 +150,13 @@ int main(void)
 		  lastActivityNeedsUpdate = 0;
 	  }
 	  if(HAL_GetTick() - lastTimeDisplay > DISPLAY_UPDATE_RATE) {
+#ifdef DEBUG
 		  char sdata[140];
 		  for(uint8_t x =0; x<10;++x) {
 		  sprintf (sdata, "%d:%d %d %d\n\r", x, adc_measures[x].termocouple, adc_measures[x].ntc, readTipTemperatureCompensated(0));
 		 HAL_UART_Transmit(&huart1, (uint8_t *)sdata, strlen(sdata), 1000);
 		  }
+#endif
 		  RE_Rotation_t r = RE_Get(&RE1_Data);
 		  oled_update();
 		  oled_processInput(r, &RE1_Data);

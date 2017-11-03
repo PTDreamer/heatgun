@@ -19,6 +19,7 @@ uint16_t readTipSensorADC_Avg(void);
 uint16_t readTipTemperatureCompensated(uint8_t new);
 uint16_t realTempToADC(uint16_t real);
 calData * getCalData();
+void setCalData();
 long map(long x, long in_min, long in_max, long out_min, long out_max);
 uint16_t adc2Human(uint16_t);
 uint16_t human2adc(uint16_t);

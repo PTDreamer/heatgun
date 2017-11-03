@@ -24,6 +24,7 @@ static widget_t *cancelButton = NULL;
 static widget_t *waitTemp = NULL;
 static gun_mode_t ironModeBackup;
 static uint16_t tempSetBackup;
+static uint16_t speedBackup;
 static uint16_t adcCal[3];
 static uint8_t processCalibration();
 
@@ -45,14 +46,17 @@ static void setCalState(state_t s) {
 		if(s == cal_200) {
 			ironModeBackup = getCurrentMode();
 			tempSetBackup = getSetTemperature();
+			speedBackup = getCurrentUserSetFanSpeed();
 		}
 		setSetTemperature(state_temps[(int)s]);
+		setCurrentUserSetFanSpeed(100);
 		setCurrentMode(mode_set);
 		sprintf(waitStr, "Setting temp.to %dC", state_temps[(int)s]);
 		measuredTemp = state_temps[(int)s];
 	}
 	else {
 		setSetTemperature(tempSetBackup);
+		setCurrentUserSetFanSpeed(speedBackup);
 		setCurrentMode(ironModeBackup);
 		waitTemp->enabled = 0;
 		strcpy(cancelButton->displayString, "Finish");
