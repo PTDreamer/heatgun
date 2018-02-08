@@ -48,13 +48,11 @@ RE_Rotation_t RE_Get(RE_State_t* data) {
 	}
 	else if (data->Diff < 0) {
 		if(data->pv_click == RE_BT_DRAG) {
-			//data->pv_click = RE_BT_HIDLE;
 			RETURN_WITH_STATUS(data, Rotate_Decrement_while_click);
 		}
 			RETURN_WITH_STATUS(data, Rotate_Decrement);
 	} else if (data->Diff > 0) {
 		if(data->pv_click == RE_BT_DRAG) {
-			//data->pv_click = RE_BT_HIDLE;
 			RETURN_WITH_STATUS(data, Rotate_Increment_while_click);
 		}
 			RETURN_WITH_STATUS(data, Rotate_Increment);
@@ -117,8 +115,10 @@ void RE_Process(RE_State_t* data) {
 		if((data->pv_click == RE_BT_PRESSED) && (now_button == 1)) {
 			if(HAL_GetTick() - long_press_time > 1000)
 				data->pv_click = RE_BT_LONG_CLICK;
-			else
+			else if(HAL_GetTick() - long_press_time > 100)
 				data->pv_click = RE_BT_CLICKED;
+			else
+				data->pv_click = RE_BT_HIDLE;
 		}
 	}
 }

@@ -11,14 +11,11 @@
 #include "../../../Src/settings.h"
 #include "../../../generalIO/rotary_encoder.h"
 
-static uint8_t hasIron = 1;
 static uint16_t m_mode = 0;
 static uint16_t m_temp = 0;
 static uint16_t m_fan = 0;
 static char *modestr[] = {"STBY", "COOL", "SET "};
-static widget_t *ironTempWidget;
 static widget_t *ironTempLabelWidget;
-static widget_t *noIronWidget;
 
 static widget_t *tempSetWidget = NULL;
 static widget_t *fanSpeedSetWidget = NULL;
@@ -31,6 +28,8 @@ static uint8_t fanSpeedIsBeeingEdited = 0;
 static uint32_t tempEditTimeout = 0;
 static uint32_t fanSpeedEditTimeout = 0;
 static RE_State_t *RE2;
+static uint16_t tempRollingAverage[10];
+static uint16_t tempRollingAverageTail = 0;
 
 void setRotaryEncoder2(RE_State_t *rotary) {
 	RE2 = rotary;
@@ -42,12 +41,27 @@ static void setTemp(uint16_t *value) {
 }
 
 static void * getTemp() {
+	static uint32_t acc;
+	static uint16_t min, max;
 	if(tempIsBeeingEdited) {
 		m_temp = getUserSetTemperature();
 		return &m_temp;
 	}
 	else {
-		m_temp = getCurrentTemperature();
+		tempRollingAverage[tempRollingAverageTail] = getCurrentTemperature();
+		min = 0xFFFF;
+		max = 0;
+		acc = 0;
+		for(uint8_t x = 0; x <(sizeof(tempRollingAverage)/ sizeof(tempRollingAverage[0])); ++x) {
+			m_temp = tempRollingAverage[x];
+			acc += m_temp;
+			if(m_temp > max)
+				max = m_temp;
+			if(m_temp < min)
+				min = m_temp;
+		}
+		acc = acc - min - max;
+		m_temp = acc / ((sizeof(tempRollingAverage)/ sizeof(tempRollingAverage[0]))-2);
 	}
 	return &m_temp;
 }
@@ -93,30 +107,16 @@ static void main_screen_init(screen_t *scr) {
 	UG_FontSetVSpace(0);
 	default_init(scr);
 }
-void main_screenUpdate(screen_t *scr) {
-	uint16_t t = readTipTemperatureCompensated(0);
-	if((t > 500) && hasIron) {
-		UG_FillScreen(C_BLACK);
-		ironTempLabelWidget->enabled = 0;
-		ironTempWidget->enabled = 0;
-		noIronWidget->enabled = 1;
-		hasIron = 0;
-	}
-	else if((t <= 500) && !hasIron){
-		UG_FillScreen(C_BLACK);
-		ironTempLabelWidget->enabled = 1;
-		ironTempWidget->enabled = 1;
-		noIronWidget->enabled = 0;
-		hasIron = 1;
-	}
-	default_screenUpdate(scr);
 
-}
 void main_screen_setup(screen_t *scr) {
+	for(uint8_t x = 0; x < (sizeof(tempRollingAverage)/ sizeof(tempRollingAverage[0])); ++x)
+	{
+		tempRollingAverage[x] = getCurrentTemperature();
+	}
 	scr->draw = &default_screenDraw;
 	scr->processInput = &main_screenProcessInput;
 	scr->init = &main_screen_init;
-	scr->update = &main_screenUpdate;
+	scr->update = &default_screenUpdate;
 
 	//gun tip temperature display
 	widget_t *widget = screen_addWidget(scr);
@@ -192,17 +192,6 @@ void main_screen_setup(screen_t *scr) {
 	widget->reservedChars = 3;
 	widget->editable.selectable.state = widget_edit;
 	fanSpeedSetWidget = widget;
-
-	widget = screen_addWidget(scr);
-	widgetDefaultsInit(widget, widget_label);
-	strcpy(widget->displayString, "NO IRON");
-	widget->posX = 20;
-	widget->posY = 20 + 5;
-	widget->font_size = &FONT_12X20;
-	widget->reservedChars = 7;
-	widget->draw = &default_widgetDraw;
-	noIronWidget = widget;
-	widget->enabled = 0;
 
 	//Thermometer bmp next to Ambient temperature
 	widget = screen_addWidget(scr);
