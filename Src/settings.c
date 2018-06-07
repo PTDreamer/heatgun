@@ -45,5 +45,9 @@ void resetSettings() {
 	systemSettings.calibrationData.calADC_At_200 = 1170;//793;
 	systemSettings.calibrationData.calADC_At_300 = 1980;//1323;
 	systemSettings.calibrationData.calADC_At_400 = 2460;//1900;
-
+	systemSettings.lastFanSpeed = 80;
+	systemSettings.lastGunTemperature = 300;
+	systemSettings.sleep.temperature = 200;
+	systemSettings.sleep.fanSpeed = 50;
+	systemSettings.sleep.maxTime = 3;
 }

@@ -71,19 +71,19 @@ static void MX_ADC1_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_IWDG_Init(void);
 static void PWM_Timer_TIM3_Init(void);
-static void MX_USART1_UART_Init(void);
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 
 RE_State_t RE1_Data;
 RE_State_t RE2_Data;
 
-static uint32_t lastActivity, lastTimeDisplay, lastTemperatureControlerTime;
+static uint32_t lastTimeDisplay, lastTemperatureControlerTime;
 
-static uint8_t lastActivityNeedsUpdate;
 
 static uint16_t ironTempADCRollingAveraget[10];
 static uint8_t rollingAvgTail = 0;
 static uint8_t activity = 1;
+static uint32_t startOfNoActivityTime = 0;
+static uint8_t startOfNoActivity = 0;
 
 int main(void)
 {
@@ -99,7 +99,6 @@ int main(void)
   MX_I2C2_Init();
   MX_IWDG_Init();
   PWM_Timer_TIM3_Init();
-  MX_USART1_UART_Init();
   HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adc_measures, sizeof(adc_measures)/ sizeof(uint16_t));
 
   UG_GUI gui;
@@ -119,36 +118,42 @@ int main(void)
   lastTimeDisplay = HAL_GetTick();
   lastTemperatureControlerTime = HAL_GetTick();
 
-  lastActivityNeedsUpdate = 0;
   __HAL_TIM_SET_COMPARE(&pwm_timer_htim3, TIM_CHANNEL_1, 5);
   setPWM_tim(&pwm_timer_htim3);
 
   restoreSettings();
   setContrast(systemSettings.contrast);
   currentCoolDownSettings = systemSettings.coolDown;
-  applyCoolDownSettings();
+  currentSleepSettings = systemSettings.sleep;
   setCalData();
-  gunInit(&pwm_timer_htim3, HEATER_CONTROL_GPIO_Port, HEATER_CONTROL_Pin);
-
+  gunInit(&pwm_timer_htim3, HEATER_CONTROL_GPIO_Port, HEATER_CONTROL_Pin, systemSettings.lastGunTemperature, systemSettings.lastFanSpeed);
   if(HAL_GPIO_ReadPin(WAKE_GPIO_Port, WAKE_Pin) == GPIO_PIN_RESET)
 	  activity = 0;
- // HAL_IWDG_Start(&hiwdg);
+  HAL_IWDG_Start(&hiwdg);
   while (1)
   {
 
-	  //HAL_IWDG_Refresh(&hiwdg);
+	  HAL_IWDG_Refresh(&hiwdg);
+
+	  if(HAL_GPIO_ReadPin(WAKE_GPIO_Port, WAKE_Pin) == GPIO_PIN_RESET) {
+		  if(startOfNoActivity == 0)
+			  startOfNoActivityTime = HAL_GetTick();
+		  startOfNoActivity = 1;
+		  if((HAL_GetTick() - startOfNoActivityTime) > 500)
+			  activity = 0;
+	  }
+	  else {
+		  activity = 1;
+		  startOfNoActivity = 0;
+	  }
+	 // activity = 1;
+
 	  if(HAL_GetTick() - lastTemperatureControlerTime > TEMPERATURE_CONTROLLER_UPDATE_RATE) {
 		  readTipTemperatureCompensated(1);
 		  handleGun(activity);
 		  lastTemperatureControlerTime = HAL_GetTick();
 	  }
-	  if((lastActivityNeedsUpdate == 1) && (HAL_GetTick() - lastActivity > 100)) {
-		  if(HAL_GPIO_ReadPin(WAKE_GPIO_Port, WAKE_Pin) == GPIO_PIN_RESET)
-			  activity = 0;
-		  else
-			  activity = 1;
-		  lastActivityNeedsUpdate = 0;
-	  }
+
 	  if(HAL_GetTick() - lastTimeDisplay > DISPLAY_UPDATE_RATE) {
 #ifdef DEBUG
 		  char sdata[140];
@@ -201,10 +206,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	}
 	else if((GPIO_Pin == ROT2_CLICK_Pin) || (GPIO_Pin == ROT2_RIGHT_Pin) || (GPIO_Pin == ROT2_LEFT_Pin)) {
 		RE_Process(&RE2_Data);
-	}
-	else if(GPIO_Pin == WAKE_Pin) {
-		lastActivityNeedsUpdate = 1;
-		lastActivity = HAL_GetTick();
 	}
 }
 
@@ -377,24 +378,6 @@ static void PWM_Timer_TIM3_Init(void)
 
 }
 
-/* USART1 init function */
-static void MX_USART1_UART_Init(void)
-{
-
-  huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
-  huart1.Init.WordLength = UART_WORDLENGTH_8B;
-  huart1.Init.StopBits = UART_STOPBITS_1;
-  huart1.Init.Parity = UART_PARITY_NONE;
-  huart1.Init.Mode = UART_MODE_TX_RX;
-  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart1) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-}
 
 /** 
   * Enable DMA controller clock

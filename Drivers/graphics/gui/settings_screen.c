@@ -16,6 +16,10 @@ static widget_t *combo = NULL;
 static uint16_t CONTRAST = 0;
 static uint16_t coolDownMaxTime = 0;
 static uint16_t coolDownTemp = 0;
+static uint8_t coolDownFanSpeed = 0;
+static uint16_t sleepMaxTime = 0;
+static uint16_t sleepTemp = 0;
+static uint8_t sleepFanSpeed = 0;
 
 static void * getContrast_() {
 	CONTRAST = getContrast();
@@ -63,6 +67,54 @@ static void * getCoolDownTemp() {
 	coolDownTemp = currentCoolDownSettings.coolDownTemperature;
 	return &coolDownTemp;
 }
+
+static void setCoolDownFanSpeed(uint8_t *val) {
+	coolDownFanSpeed = *val;
+	currentCoolDownSettings.fanSpeed = coolDownFanSpeed;
+}
+static void * getCoolDownFanSpeed() {
+	coolDownFanSpeed = currentCoolDownSettings.fanSpeed;
+	return &coolDownFanSpeed;
+}
+
+////
+static int saveSleep(widget_t *w) {
+	systemSettings.sleep = currentSleepSettings;
+	saveSettings();
+	return screen_main;
+}
+static int cancelSleep(widget_t *w) {
+	currentSleepSettings = systemSettings.sleep;
+	return screen_main;
+}
+static void setSleepMaxTime(uint16_t *val) {
+	sleepMaxTime = *val;
+	currentSleepSettings.maxTime = sleepMaxTime;
+}
+
+static void * getSleepMaxTime() {
+	sleepMaxTime = currentSleepSettings.maxTime;
+	return &sleepMaxTime;
+}
+
+static void setSleepTemp(uint16_t *val) {
+	sleepTemp = *val;
+	currentSleepSettings.temperature = sleepTemp;
+}
+static void * getSleepTemp() {
+	sleepTemp = currentSleepSettings.temperature;
+	return &sleepTemp;
+}
+
+static void setSleepFanSpeed(uint8_t *val) {
+	sleepFanSpeed = *val;
+	currentSleepSettings.fanSpeed = sleepFanSpeed;
+}
+static void * getSleepFanSpeed() {
+	sleepFanSpeed = currentSleepSettings.fanSpeed;
+	return &sleepFanSpeed;
+}
+
 static void settings_screen_init(screen_t *scr) {
 	UG_FontSetHSpace(0);
 	UG_FontSetVSpace(0);
@@ -93,6 +145,7 @@ void settings_screen_setup(screen_t *scr) {
 	widget->posY = 17;
 	widget->font_size = &FONT_6X8;
 	comboAddItem(widget, "SCREEN", screen_edit_contrast);
+	comboAddItem(widget, "COOL DOWN", screen_edit_cooldown);
 	comboAddItem(widget, "SLEEP", screen_edit_sleep);
 	comboAddItem(widget, "CALIBRATION", screen_edit_calibration_wait);
 	comboAddItem(widget, "EXIT", screen_main);
@@ -158,8 +211,8 @@ void settings_screen_setup(screen_t *scr) {
 	w->buttonWidget.selectable.tab = 2;
 	w->buttonWidget.action = &cancelContrast;
 
-	//Screen edit Sleep
-	sc = oled_addScreen(screen_edit_sleep);
+	//Screen edit CoolDown
+	sc = oled_addScreen(screen_edit_cooldown);
 	sc->draw = &default_screenDraw;
 	sc->processInput = &default_screenProcessInput;
 	sc->init = &default_init;
@@ -167,7 +220,7 @@ void settings_screen_setup(screen_t *scr) {
 	w = screen_addWidget(sc);
 
 	widgetDefaultsInit(w, widget_label);
-	s = "SLEEP & STANDBY";
+	s = "Cool Down";
 	strcpy(w->displayString, s);
 	w->posX = 0;
 	w->posY = 0;
@@ -176,12 +229,11 @@ void settings_screen_setup(screen_t *scr) {
 
 	w = screen_addWidget(sc);
 	widgetDefaultsInit(w, widget_label);
-	s = "Sleep Time(s):";
+	s = "Max Time(m):";
 	strcpy(w->displayString, s);
 	w->posX = 2;
 	w->posY = 17;
 	w->font_size = &FONT_6X8;
-	w->reservedChars = 3;
 	//
 	w = screen_addWidget(sc);
 	widgetDefaultsInit(w, widget_editable);
@@ -200,7 +252,7 @@ void settings_screen_setup(screen_t *scr) {
 
 	w = screen_addWidget(sc);
 	widgetDefaultsInit(w, widget_label);
-	s = "Sleep Temp(C):";
+	s = "Temp(C):";
 	strcpy(w->displayString, s);
 	w->posX = 2;
 	w->posY = 29;
@@ -224,12 +276,27 @@ void settings_screen_setup(screen_t *scr) {
 
 	w = screen_addWidget(sc);
 	widgetDefaultsInit(w, widget_label);
-	s = "StandBy Time(m):";
+	s = "Fan Speed:";
 	strcpy(w->displayString, s);
 	w->posX = 2;
 	w->posY = 41;
 	w->font_size = &FONT_6X8;
 	w->reservedChars = 3;
+
+	w = screen_addWidget(sc);
+	widgetDefaultsInit(w, widget_editable);
+	w->posX = 100;
+	w->posY = 41;
+	w->font_size = &FONT_6X8;
+	w->editable.inputData.getData = &getCoolDownFanSpeed;
+	w->editable.inputData.number_of_dec = 0;
+	w->editable.inputData.type = field_uinteger16;
+	w->editable.big_step = 10;
+	w->editable.step = 1;
+	w->editable.selectable.tab = 2;
+	w->editable.setData = (void (*)(void *))&setCoolDownFanSpeed;
+	w->reservedChars = 3;
+	w->editable.max_value = 100;
 
 	w = screen_addWidget(sc);
 	widgetDefaultsInit(w, widget_button);
@@ -251,5 +318,113 @@ void settings_screen_setup(screen_t *scr) {
 	w->reservedChars = 6;
 	w->buttonWidget.selectable.tab = 4;
 	w->buttonWidget.action = &cancelCoolDown;
-	}
 
+	//Screen edit sleep
+	sc = oled_addScreen(screen_edit_sleep);
+	sc->draw = &default_screenDraw;
+	sc->processInput = &default_screenProcessInput;
+	sc->init = &default_init;
+	sc->update = &default_screenUpdate;
+	w = screen_addWidget(sc);
+
+	widgetDefaultsInit(w, widget_label);
+	s = "Sleep";
+	strcpy(w->displayString, s);
+	w->posX = 0;
+	w->posY = 0;
+	w->font_size = &FONT_8X14;
+	w->reservedChars = 3;
+
+	w = screen_addWidget(sc);
+	widgetDefaultsInit(w, widget_label);
+	s = "Max Time(m):";
+	strcpy(w->displayString, s);
+	w->posX = 2;
+	w->posY = 17;
+	w->font_size = &FONT_6X8;
+	//
+	w = screen_addWidget(sc);
+	widgetDefaultsInit(w, widget_editable);
+	w->posX = 100;
+	w->posY = 17;
+	w->font_size = &FONT_6X8;
+	w->editable.inputData.getData = &getSleepMaxTime;
+	w->editable.inputData.number_of_dec = 0;
+	w->editable.inputData.type = field_uinteger16;
+	w->editable.big_step = 10;
+	w->editable.step = 1;
+	w->editable.selectable.tab = 0;
+	w->editable.setData = (void (*)(void *))&setSleepMaxTime;
+	w->editable.max_value = 999;
+	w->reservedChars = 3;
+
+	w = screen_addWidget(sc);
+	widgetDefaultsInit(w, widget_label);
+	s = "Temp(C):";
+	strcpy(w->displayString, s);
+	w->posX = 2;
+	w->posY = 29;
+	w->font_size = &FONT_6X8;
+	w->reservedChars = 3;
+
+	w = screen_addWidget(sc);
+	widgetDefaultsInit(w, widget_editable);
+	w->posX = 100;
+	w->posY = 29;
+	w->font_size = &FONT_6X8;
+	w->editable.inputData.getData = &getSleepTemp;
+	w->editable.inputData.number_of_dec = 0;
+	w->editable.inputData.type = field_uinteger16;
+	w->editable.big_step = 10;
+	w->editable.step = 1;
+	w->editable.selectable.tab = 1;
+	w->editable.setData = (void (*)(void *))&setSleepTemp;
+	w->reservedChars = 3;
+	w->editable.max_value = 450;
+
+	w = screen_addWidget(sc);
+	widgetDefaultsInit(w, widget_label);
+	s = "Fan Speed:";
+	strcpy(w->displayString, s);
+	w->posX = 2;
+	w->posY = 41;
+	w->font_size = &FONT_6X8;
+	w->reservedChars = 3;
+
+	w = screen_addWidget(sc);
+	widgetDefaultsInit(w, widget_editable);
+	w->posX = 100;
+	w->posY = 41;
+	w->font_size = &FONT_6X8;
+	w->editable.inputData.getData = &getSleepFanSpeed;
+	w->editable.inputData.number_of_dec = 0;
+	w->editable.inputData.type = field_uinteger16;
+	w->editable.big_step = 10;
+	w->editable.step = 1;
+	w->editable.selectable.tab = 2;
+	w->editable.setData = (void (*)(void *))&setSleepFanSpeed;
+	w->reservedChars = 3;
+	w->editable.max_value = 100;
+
+	w = screen_addWidget(sc);
+	widgetDefaultsInit(w, widget_button);
+	w->font_size = &FONT_6X8;
+	w->posX = 2;
+	w->posY = 56;
+	s = "SAVE";
+	strcpy(w->displayString, s);
+	w->reservedChars = 4;
+	w->buttonWidget.selectable.tab = 3;
+	w->buttonWidget.action = &saveSleep;
+	w = screen_addWidget(sc);
+	widgetDefaultsInit(w, widget_button);
+	w->font_size = &FONT_6X8;
+	w->posX = 90;
+	w->posY = 56;
+	s = "CANCEL";
+	strcpy(w->displayString, s);
+	w->reservedChars = 6;
+	w->buttonWidget.selectable.tab = 4;
+	w->buttonWidget.action = &cancelSleep;
+
+}

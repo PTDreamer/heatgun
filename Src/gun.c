@@ -24,11 +24,15 @@ static uint8_t isGunOn = 0;
 static uint32_t powerCalcTimer;
 static uint8_t currentFanSpeed = 80;
 static uint8_t currentUserSetFanSpeed = 80;
-#define POWER_CALCULATION_PERIOD 5000
+#define POWER_CALCULATION_PERIOD 1000
 
 static GPIO_TypeDef *m_heater_port = NULL;
 static TIM_HandleTypeDef *fanTimer = NULL;
 static uint16_t m_heater_pin;
+static uint8_t temperatureNeedsSaving = 0;
+static uint32_t temperatureNeedsSavingTime = 0;
+static uint8_t fanSpeedNeedsSaving = 0;
+static uint32_t fanSpeedNeedsSavingTime = 0;
 
 typedef struct setTemperatureReachedCallbackStruct_t setTemperatureReachedCallbackStruct_t;
 
@@ -51,7 +55,7 @@ uint8_t getCurrentFanSpeed() {
 uint8_t getCurrentUserSetFanSpeed() {
 	return currentUserSetFanSpeed;
 }
-static void setCurrentFanSpeed(uint8_t speed) {
+void setCurrentFanSpeed(uint8_t speed) {
 	if(speed == 0) {
 		HAL_TIM_PWM_Stop(fanTimer, TIM_CHANNEL_1);
 	}
@@ -63,6 +67,10 @@ static void setCurrentFanSpeed(uint8_t speed) {
 void setCurrentUserSetFanSpeed(uint8_t speed) {
 	currentUserSetFanSpeed = speed;
 	setCurrentFanSpeed(speed);
+	if(speed != systemSettings.lastFanSpeed) {
+		fanSpeedNeedsSaving = 1;
+		fanSpeedNeedsSavingTime = HAL_GetTick();
+	}
 }
 static void temperatureReached(uint16_t temp) {
 	setTemperatureReachedCallbackStruct_t *s = temperatureReachedCallbacks;
@@ -72,10 +80,6 @@ static void temperatureReached(uint16_t temp) {
 		}
 		s = s->next;
 	}
-}
-
-void applyCoolDownSettings() {
-	currentCoolDownSettings = systemSettings.coolDown;
 }
 
 static void modeChanged(gun_mode_t newMode) {
@@ -90,6 +94,10 @@ void setSetTemperature(uint16_t temperature) {
 	user_currentSetTemperature = temperature;
 	temperatureReachedFlag = 0;
 	setCurrentTemperature(temperature);
+	if(temperature != systemSettings.lastGunTemperature) {
+		temperatureNeedsSaving = 1;
+		temperatureNeedsSavingTime = HAL_GetTick();
+	}
 }
 void setCurrentTemperature(uint16_t temperature) {
 	currentSetTemperature = temperature;
@@ -137,6 +145,10 @@ void setCurrentMode(gun_mode_t mode) {
 			setCurrentTemperature(currentCoolDownSettings.coolDownTemperature);
 			setCurrentFanSpeed(currentCoolDownSettings.fanSpeed);
 			break;
+		case mode_sleep:
+			setCurrentTemperature(currentSleepSettings.temperature);
+			setCurrentFanSpeed(currentSleepSettings.fanSpeed);
+			break;
 		case mode_standby:
 			setCurrentTemperature(0);
 			setCurrentFanSpeed(0);
@@ -157,24 +169,42 @@ uint16_t getUserSetTemperature() {
 	return user_currentSetTemperature;
 }
 void handleGun(uint8_t activity) {
+	if(temperatureNeedsSaving && ((HAL_GetTick() - temperatureNeedsSavingTime) > 3000)) {
+		systemSettings.lastGunTemperature = user_currentSetTemperature;
+		temperatureNeedsSaving = 0;
+		saveSettings();
+	}
+	if(fanSpeedNeedsSaving && ((HAL_GetTick() - fanSpeedNeedsSavingTime) > 3000)) {
+		systemSettings.lastFanSpeed = currentUserSetFanSpeed;
+		fanSpeedNeedsSaving = 0;
+		saveSettings();
+	}
 	uint32_t currentTime = HAL_GetTick();
 	if(currentTime - powerCalcTimer > POWER_CALCULATION_PERIOD) {
 		currentGunPower = ((double)(gunTimeOnSinceLastUpdate * 100))/ (double)POWER_CALCULATION_PERIOD;
 		gunTimeOnSinceLastUpdate = 0;
+		lastGunTimeOn = HAL_GetTick();
 		if(currentGunPower > 100)
 			currentGunPower = 100;
+		powerCalcTimer = HAL_GetTick();
 	}
 	switch (currentMode) {
 		case mode_set:
 			if(activity)
 				currentModeTimer = currentTime;
 			else
-				setCurrentMode(mode_cooling);
+				setCurrentMode(mode_sleep);
+			break;
+		case mode_sleep:
+			if(activity)
+				setCurrentMode(mode_set);
+			else {
+				if(currentTime - currentModeTimer > (currentSleepSettings.maxTime * 1000 * 60)) {
+					setCurrentMode(mode_standby);
+				}
+			}
 			break;
 		case mode_cooling:
-			//if(activity) {
-			//	setCurrentMode(mode_set);
-			//}
 			if(currentTime - currentModeTimer > (currentCoolDownSettings.maxTime * 1000 * 60)) {
 				setCurrentMode(mode_standby);
 			}
@@ -193,7 +223,7 @@ void handleGun(uint8_t activity) {
 			lastGunTimeOn = HAL_GetTick();
 		}
 		else {
-			gunTimeOnSinceLastUpdate += lastGunTimeOn - HAL_GetTick();
+			gunTimeOnSinceLastUpdate += (HAL_GetTick() - lastGunTimeOn);
 			lastGunTimeOn = HAL_GetTick();
 		}
 		HAL_GPIO_WritePin(m_heater_port, m_heater_pin, GPIO_PIN_SET);
@@ -201,7 +231,7 @@ void handleGun(uint8_t activity) {
 	else {
 		if(isGunOn) {
 			isGunOn = 0;
-			gunTimeOnSinceLastUpdate += lastGunTimeOn - HAL_GetTick();
+			gunTimeOnSinceLastUpdate += (HAL_GetTick()- lastGunTimeOn);
 		}
 		HAL_GPIO_WritePin(m_heater_port, m_heater_pin, GPIO_PIN_RESET);
 	}
@@ -213,11 +243,15 @@ void handleGun(uint8_t activity) {
 uint16_t getCurrentTemperature() {
 	return readTipTemperatureCompensated(0);
 }
-void gunInit(TIM_HandleTypeDef *fanTim, GPIO_TypeDef *heater_port, uint16_t heater_pin) {
+void gunInit(TIM_HandleTypeDef *fanTim, GPIO_TypeDef *heater_port, uint16_t heater_pin, uint16_t temperature, uint8_t fan) {
 	m_heater_port = heater_port;
 	m_heater_pin = heater_pin;
 	powerCalcTimer = HAL_GetTick();
 	fanTimer = fanTim;
+	currentSetTemperature = temperature;
+	user_currentSetTemperature = temperature;
+	currentFanSpeed = fan;
+	currentUserSetFanSpeed = fan;
 }
 
 uint8_t getCurrentPower() {

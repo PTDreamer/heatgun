@@ -14,7 +14,7 @@
 static uint16_t m_mode = 0;
 static uint16_t m_temp = 0;
 static uint16_t m_fan = 0;
-static char *modestr[] = {"STBY", "COOL", "SET "};
+static char *modestr[] = {"STBY", "COOL", "SLEEP", "SET "};
 static widget_t *ironTempLabelWidget;
 
 static widget_t *tempSetWidget = NULL;
@@ -49,6 +49,9 @@ static void * getTemp() {
 	}
 	else {
 		tempRollingAverage[tempRollingAverageTail] = getCurrentTemperature();
+		++tempRollingAverageTail;
+		if(tempRollingAverageTail > (sizeof(tempRollingAverage)/ sizeof(tempRollingAverage[0])) -1)
+			tempRollingAverageTail = 0;
 		min = 0xFFFF;
 		max = 0;
 		acc = 0;
@@ -154,7 +157,7 @@ void main_screen_setup(screen_t *scr) {
 	//power display
 	widget = screen_addWidget(scr);
 	widgetDefaultsInit(widget, widget_display);
-	widget->posX = 93;
+	widget->posX = 96;
 	widget->posY = 1;
 	widget->font_size = &FONT_8X14;
 	widget->displayWidget.getData = &main_screen_getGunPower;
@@ -257,7 +260,7 @@ static int main_screenProcessInput(screen_t * scr, RE_Rotation_t input, RE_State
 		if(getCurrentMode() == mode_standby || getCurrentMode() == mode_cooling) {
 			setCurrentMode(mode_set);
 		}
-		else if(getCurrentMode() == mode_set) {
+		else if(getCurrentMode() == mode_set || getCurrentMode() == mode_sleep) {
 			setCurrentMode(mode_cooling);
 		}
 		return ret;

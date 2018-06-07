@@ -21,6 +21,9 @@ struct systemSettings {
 	uint8_t contrast;
 	calData calibrationData;
 	gunCoolDown_t coolDown;
+	uint8_t lastFanSpeed;
+	uint16_t lastGunTemperature;
+	gunSleep_t sleep;
 } systemSettings;
 
 void saveSettings();
